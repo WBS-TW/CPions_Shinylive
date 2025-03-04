@@ -1,0 +1,13 @@
+name: CPions20250218
+title: CPions20250218
+username: wbs-tw
+account: wbs-tw
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14028699
+bundleId: 9888878
+url: https://wbs-tw.shinyapps.io/CPions20250218/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|LICENSE|README.md|docs
