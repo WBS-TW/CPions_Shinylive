@@ -1,4 +1,4 @@
-# Copied from CPions 2025-02-05
+# Copied from CPions 2025-03-10
 # Deploy CPions on static website in Github pages using Shinylive
 
 library(shiny)
@@ -19,6 +19,8 @@ library(markdown)
 
 
 ##############################################################################
+
+# Various utilities and helper functions for CPions
 
 # Various utilities and helper functions for CPions
 
@@ -155,10 +157,12 @@ calculate_haloperc <- function(Molecule_Formula) {
 
 generateInput_Envipat_normal <- function(data = data, group = group, adduct_ions = adduct_ions, fragment_ions = fragment_ions) {
 
-
     data <- data |>
         dplyr::mutate(Halo_perc = dplyr::case_when(group == "PCA" ~ round(35.45*Cl / (12.01*C + 1.008*(2*C+2-Cl) + 35.45*Cl)*100, 0),
                                                    group == "PCO" ~ round(35.45*Cl / (12.01*C + 1.008*(2*C-Cl) + 35.45*Cl)*100, 0))) |>
+        dplyr::mutate(Compound_Class = dplyr::case_when(group == "PCA" ~ "PCA",
+                                                        group == "PCO" ~"PCO",
+                                                        group == "BCA" ~ "BCA")) |>
         dplyr::mutate(Adduct = adduct_ions) |>
         dplyr::mutate(Cl = dplyr::case_when(
             fragment_ions == "-Cl" ~ Cl-1,
@@ -186,7 +190,7 @@ generateInput_Envipat_normal <- function(data = data, group = group, adduct_ions
         dplyr::mutate(Adduct_Formula = dplyr::case_when(
             fragment_ions != "+Br" ~ paste0("C", C, "H", H, "Cl", Cl),
             fragment_ions == "+Br" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br))) |>
-        dplyr::select(Molecule_Formula, Halo_perc, Charge, Adduct, Adduct_Formula, C, H, Cl)
+        dplyr::select(Molecule_Formula, Compound_Class, Halo_perc, Charge, Adduct, Adduct_Formula, C, H, Cl)
 
     return(data)
 }
@@ -203,6 +207,9 @@ generateInput_Envipat_BCA <- function(data = data, group = group, adduct_ions = 
 
     data <- data |>
         dplyr::mutate(Halo_perc = round((35.45*Cl+79.90*Br) / (12.01*C + 1.008*(2*C-Cl-Br) + 35.45*Cl+79.90*Br)*100, 0)) |>
+        dplyr::mutate(Compound_Class = dplyr::case_when(group == "PCA" ~ "PCA",
+                                                        group == "PCO" ~"PCO",
+                                                        group == "BCA" ~ "BCA")) |>
         dplyr::mutate(Adduct = adduct_ions) |>
         dplyr::mutate(Cl = dplyr::case_when(
             fragment_ions == "-Cl" ~ Cl-1,
@@ -224,7 +231,7 @@ generateInput_Envipat_BCA <- function(data = data, group = group, adduct_ions = 
             fragment_ions == "-2Cl-HCl" ~ H-1,
             .default = H)) |>
         dplyr::mutate(Adduct_Formula = paste0("C", C, "H", H, "Cl", Cl, "Br", Br)) |>
-        dplyr::select(Molecule_Formula, Halo_perc, Charge, Adduct, Adduct_Formula, C, H, Cl, Br)
+        dplyr::select(Molecule_Formula, Compound_Class, Halo_perc, Charge, Adduct, Adduct_Formula, C, H, Cl, Br)
 
     return(data)
 }
@@ -269,16 +276,16 @@ generateInput_Envipat_advanced <- function(data = data, Compounds = Compounds, A
         dplyr::mutate(Br = ifelse(Compound_Class == "BCA", Br, 0)) |>
         dplyr::mutate(Br = ifelse(Adduct_Ion == "+Br", Br+1, Br)) |>
         dplyr::mutate(O = dplyr::case_when(
-            TP == "+OH" ~ 1,
-            TP == "+2OH" ~ 2,
-            TP == "+SO4H" ~ 4,
+            TP == "-H+OH" ~ 1,
+            TP == "-2H+2OH" ~ 2,
+            TP == "-H+SO4H" ~ 4,
             TP == "-Cl+OH" ~ 1,
             TP == "-2Cl+2OH" ~ 2,
             TP == "-2H+O" ~ 1,
             .default = 0
         )) |>
         dplyr::mutate(S = dplyr::case_when(
-            TP == "+SO4H" ~ 1,
+            TP == "-H+SO4H" ~ 1,
             .default = 0)) |>
         dplyr::mutate(Adduct_Formula = create_formula(C, H, Cl, Br, S, O))|>
         dplyr::rowwise() |>
@@ -298,7 +305,7 @@ getAdduct_normal <- function(adduct_ions, C, Cl, Clmax, threshold) {
     # Regex to extract strings
     ion_modes <- stringr::str_extract(adduct_ions, "(?<=\\]).{1}") # Using lookbehind assertion to extract ion mode
     fragment_ions <- stringr::str_extract(adduct_ions, "(?<=.{4}).+?(?=\\])") # extract after the 3rd character and before ]
-    group <- stringr::str_extract(adduct_ions, "[^\\[].{2}") # Using positive lookbehind for [)
+    group <- stringr::str_extract(adduct_ions, "(?<=\\[)[A-Za-z]+(?=[+-])") # Using positive lookbehind precedes a [ ; matches on or more letters ; positive lookahead of either + or -
 
     if (group == "PCA") {
         data <- crossing(C, Cl) |> #set combinations of C and Cl
@@ -354,11 +361,13 @@ getAdduct_normal <- function(adduct_ions, C, Cl, Clmax, threshold) {
         for (j in seq_along(data$Adduct_Formula)) {
             Adduct_Formula <- data$Adduct_Formula[j]
             Molecule_Formula <- data$Molecule_Formula[j]
+            Compound_Class <- data$Compound_Class[j]
             Charge <- data$Charge[j]
             Halo_perc <- data$Halo_perc[j]
             dat <- getisotopes(x = as.character(data$Adduct_Formula[j]))
             dat <- as.data.frame(dat[[1]])
             dat <- dat |>
+                dplyr::mutate(Compound_Class = Compound_Class) |>
                 dplyr::mutate(abundance = round(abundance, 1)) |>
                 dplyr::mutate(`m/z` = round(`m/z`, 6)) |>
                 dplyr::mutate(Isotope_Formula = paste0("[12C]", `12C`, "[13C]", `13C`, "[1H]", `1H`, "[2H]", `2H`, "[35Cl]", `35Cl`, "[37Cl]", `37Cl`, "[79Br]", `79Br`, "[81Br]", `81Br`)) |>
@@ -390,18 +399,20 @@ getAdduct_normal <- function(adduct_ions, C, Cl, Clmax, threshold) {
                     `13C` + (`37Cl`+`81Br`)*2 == 20 ~ "+20")) |>
                 dplyr::mutate(Adduct = paste0(adduct_ions, " ", Isotopologue)) |>
                 dplyr::rename(Rel_ab = abundance) |>
-                dplyr::select(Molecule_Formula, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab, `12C`, `13C`, `1H`, `2H`, `35Cl`, `37Cl`, `79Br`, `81Br`)
+                dplyr::select(Molecule_Formula, Compound_Class, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab, `12C`, `13C`, `1H`, `2H`, `35Cl`, `37Cl`, `79Br`, `81Br`)
             data_ls[[j]] <- dat
         }
     }else { # for other adducts
         for (j in seq_along(data$Adduct_Formula)) {
             Adduct_Formula <- data$Adduct_Formula[j]
             Molecule_Formula <- data$Molecule_Formula[j]
+            Compound_Class <- data$Compound_Class[j]
             Charge <- data$Charge[j]
             Halo_perc <- data$Halo_perc[j]
             dat <- getisotopes(x = as.character(data$Adduct_Formula[j]))
             dat <- as.data.frame(dat[[1]])
             dat <- dat |>
+                dplyr::mutate(Compound_Class = Compound_Class) |>
                 dplyr::mutate(abundance = round(abundance, 1)) |>
                 dplyr::mutate(`m/z` = round(`m/z`, 6)) |>
                 dplyr::mutate(Isotope_Formula = paste0("[12C]", `12C`, "[13C]", `13C`, "[1H]", `1H`, "[2H]", `2H`, "[35Cl]", `35Cl`, "[37Cl]", `37Cl`)) |>
@@ -433,7 +444,7 @@ getAdduct_normal <- function(adduct_ions, C, Cl, Clmax, threshold) {
                     `13C` + (`37Cl`)*2 == 20 ~ "+20")) |>
                 dplyr::mutate(Adduct = paste0(adduct_ions, " ", Isotopologue)) |>
                 dplyr::rename(Rel_ab = abundance) |>
-                dplyr::select(Molecule_Formula, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab, `12C`, `13C`, `1H`, `2H`, `35Cl`, `37Cl`)
+                dplyr::select(Molecule_Formula, Compound_Class, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab, `12C`, `13C`, `1H`, `2H`, `35Cl`, `37Cl`)
             data_ls[[j]] <- dat
         }
     }
@@ -510,6 +521,7 @@ getAdduct_BCA <- function(adduct_ions, C, Cl, Br, Clmax, Brmax, threshold) {
 
 
     for (j in seq_along(data$Adduct_Formula)) {
+        Compound_Class <- data$Compound_Class[j]
         Adduct_Formula <- data$Adduct_Formula[j]
         Molecule_Formula <- data$Molecule_Formula[j]
         Charge <- data$Charge[j]
@@ -517,6 +529,7 @@ getAdduct_BCA <- function(adduct_ions, C, Cl, Br, Clmax, Brmax, threshold) {
         dat <- getisotopes(x = as.character(data$Adduct_Formula[j]))
         dat <- as.data.frame(dat[[1]])
         dat <- dat |>
+            dplyr::mutate(Compound_Class = Compound_Class) |>
             dplyr::mutate(abundance = round(abundance, 1)) |>
             dplyr::mutate(`m/z` = round(`m/z`, 6)) |>
             dplyr::mutate(Isotope_Formula = paste0("[12C]", `12C`, "[13C]", `13C`, "[1H]", `1H`, "[2H]", `2H`, "[35Cl]", `35Cl`, "[37Cl]", `37Cl`, "[79Br]", `79Br`, "[81Br]", `81Br`)) |>
@@ -548,7 +561,7 @@ getAdduct_BCA <- function(adduct_ions, C, Cl, Br, Clmax, Brmax, threshold) {
                 `13C` + (`37Cl`+`81Br`)*2 == 20 ~ "+20")) |>
             dplyr::mutate(Adduct = paste0(adduct_ions, " ", Isotopologue)) |>
             dplyr::rename(Rel_ab = abundance) |>
-            dplyr::select(Molecule_Formula, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab, `12C`, `13C`, `1H`, `2H`, `35Cl`, `37Cl`, `79Br`, `81Br`)
+            dplyr::select(Molecule_Formula, Compound_Class, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab, `12C`, `13C`, `1H`, `2H`, `35Cl`, `37Cl`, `79Br`, `81Br`)
         data_ls[[j]] <- dat
     }
 
@@ -576,25 +589,25 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
             dplyr::filter(Cl <= Clmax) |> # limit chlorine atoms.
             dplyr::mutate(H = dplyr::case_when(# add H atoms
                 TP == "None" ~ 2*C+2-Cl, #PCA general formula 2*C+2-Cl
-                TP == "+OH" ~ 2*C+2-Cl,
-                TP == "+2OH" ~ 2*C+2-Cl,
+                TP == "-H+OH" ~ 2*C+2-Cl,
+                TP == "-2H+2OH" ~ 2*C+2-Cl,
                 TP == "-Cl+OH" ~ 2*C+2-Cl+1,
                 TP == "-2Cl+2OH" ~ 2*C+2-Cl+2,
                 TP == "-2H+O" ~ 2*C-Cl,
-                TP == "+SO4H" ~ 2*C+2-Cl))  |>
+                TP == "-H+SO4H" ~ 2*C+2-Cl))  |>
             dplyr::mutate(Cl = dplyr::case_when(
                 TP == "-Cl+OH" ~ Cl-1,
                 TP == "-2Cl+2OH" ~ Cl-2,
                 .default = Cl)) |>
             dplyr::mutate(Molecule_Formula = paste0("C", C, "H", H, "Cl", Cl)) |>
-            dplyr::mutate(Molecule_Formula = case_when( #DOUBLE CHECK THE FORMULA IS CORRECT!!!!!
+            dplyr::mutate(Molecule_Formula = case_when(
                 TP == "None" ~ paste0("C", C, "H", H, "Cl", Cl),
-                TP == "+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O"),
-                TP == "+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O2"),
+                TP == "-H+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O"),
+                TP == "-2H+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O2"),
                 TP == "-Cl+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O"),
                 TP == "-2Cl+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O2"),
                 TP == "-2H+O" ~ paste0("C", C, "H", H, "Cl", Cl,"O"),
-                TP == "+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "SO4")))
+                TP == "-H+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "SO4")))
 
     } else if (Compounds == "PCO") {
         data <- crossing(C, Cl) |>
@@ -602,12 +615,12 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
             dplyr::filter(Cl <= Clmax) |>
             dplyr::mutate(H = dplyr::case_when(# add H atoms.
                 TP == "None" ~ 2*C-Cl, #PCO general formula 2*C-Cl
-                TP == "+OH" ~ 2*C-Cl,
-                TP == "+2OH" ~ 2*C-Cl,
+                TP == "-H+OH" ~ 2*C-Cl,
+                TP == "-2H+2OH" ~ 2*C-Cl,
                 TP == "-Cl+OH" ~ 2*C-Cl+1,
                 TP == "-2Cl+2OH" ~ 2*C-Cl+2,
                 TP == "-2H+O" ~ 2*C-Cl-2,
-                TP == "+SO4H" ~ 2*C-Cl))  |>
+                TP == "-H+SO4H" ~ 2*C-Cl))  |>
             dplyr::mutate(Cl = dplyr::case_when(
                 TP == "-Cl+OH" ~ Cl-1,
                 TP == "-2Cl+2OH" ~ Cl-2,
@@ -615,12 +628,12 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
             dplyr::mutate(Molecule_Formula = paste0("C", C, "H", H, "Cl", Cl)) |>
             dplyr::mutate(Molecule_Formula = dplyr::case_when( #DOUBLE CHECK THE FORMULA IS CORRECT!!!!!
                 TP == "None" ~ paste0("C", C, "H", H, "Cl", Cl),
-                TP == "+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O"),
-                TP == "+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O2"),
+                TP == "-H+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O"),
+                TP == "-2H+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O2"),
                 TP == "-Cl+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O"),
                 TP == "-2Cl+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "O2"),
                 TP == "-2H+O" ~ paste0("C", C, "H", H, "Cl", Cl,"O"),
-                TP == "+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "SO4")))
+                TP == "-H+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "SO4")))
 
     } else if (Compounds == "BCA") {
         data <- tidyr::crossing(C, Cl, Br) |>  #get combinations of C, Cl, Br
@@ -630,20 +643,20 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
             dplyr::filter(Br + Cl <= C) |>
             dplyr::mutate(H = dplyr::case_when(# add H atoms.
                 TP == "None" ~ 2*C+2-Cl-Br, #BCA general formula
-                TP == "+OH" ~ 2*C+2-Cl-Br,
-                TP == "+2OH" ~ 2*C+2-Cl-Br,
+                TP == "-H+OH" ~ 2*C+2-Cl-Br,
+                TP == "-2H+2OH" ~ 2*C+2-Cl-Br,
                 TP == "-Cl+OH" ~ 2*C+2-Cl-Br+1,
                 TP == "-2Cl+2OH" ~ 2*C+2-Cl-Br+2,
                 TP == "-2H+O" ~ 2*C-Cl-Br,
-                TP == "+SO4H" ~ 2*C+2-Cl-Br))  |>
+                TP == "-H+SO4H" ~ 2*C+2-Cl-Br))  |>
             dplyr::mutate(Molecule_Formula = dplyr::case_when( #DOUBLE CHECK THE FORMULA IS CORRECT!!!!!
                 TP == "None" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br),
-                TP == "+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O"),
-                TP == "+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O2"),
+                TP == "-H+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O"),
+                TP == "-2H+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O2"),
                 TP == "-Cl+OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O"),
                 TP == "-2Cl+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O2"),
                 TP == "-2H+O" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O"),
-                TP == "+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "SO4")))
+                TP == "-H+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "SO4")))
 
 
     }
@@ -936,7 +949,352 @@ isotopes <- structure(list(element = c("H", "H", "He", "He", "Li", "Li",
 
 
 
-###############################################################################
+#############################################################################
+#############################################################################
+
+## NOT WORKING YET ##
+#Add the ISRS formula to the CP_allions table if they exist
+
+addISRS <- function(ISRS_input, CP_allions, threshold) {
+
+    ISRS <- unlist(str_split(ISRS_input, "\n"))
+
+    ISRS_data <- list()
+
+    ISRS <- tibble::tibble(text = ISRS) %>%
+        tidyr::separate(text, into = c("Compound_Class", "Adduct_Formula", "Charge"), sep = " ") |>
+        dplyr::mutate(Charge = dplyr::case_when(
+            Charge == "+" ~ 1,
+            Charge == "-" ~ -1))
+
+    for (i in seq_along(ISRS$Adduct_Formula)) {
+        Compound_Class <- ISRS$Compound_Class[i]
+        Adduct_Formula <- ISRS$Adduct_Formula[i]
+        Charge <- ISRS$Charge[i]
+
+        dat <- enviPat::isopattern(isotopes = isotopes,
+                                   chemforms = Adduct_Formula,
+                                   threshold = threshold,
+                                   emass = 0.00054857990924,
+                                   plotit = FALSE,
+                                   charge = Charge)
+
+        dat <- tibble::as_tibble(dat[[1]], .name_repair = "unique")
+
+        names(dat) <- make.unique(names(dat))
+
+        dat <- dat |>
+            dplyr::mutate(abundance = round(abundance, 1)) |>
+            dplyr::mutate(`m/z` = round(`m/z`, 6)) |>
+            dplyr::mutate(Isotope_Formula = NA) |>
+            dplyr::mutate(Molecule_Formula = Adduct_Formula) |>
+            dplyr::mutate(Compound_Class = Compound_Class) |>
+            dplyr::mutate(Halo_perc = NA) |>
+            dplyr::mutate(Adduct_Formula =  Adduct_Formula) |>
+            dplyr::mutate(Charge = Charge) |>
+            dplyr::mutate(Isotopologue = NA) |>
+            dplyr::mutate(Adduct = NA) |>
+            dplyr::rename(Rel_ab = abundance) |>
+            dplyr::select(Molecule_Formula, Compound_Class, Halo_perc, Charge, Adduct, Adduct_Formula, Isotopologue, Isotope_Formula, `m/z`, Rel_ab)
+
+        ISRS_data[[i]] <- dat
+
+    }
+    # combine all elements in list list to get dataframe
+    ISRS_data <- do.call(rbind, ISRS_data)
+    df <- dplyr::bind_rows(CP_allions, ISRS_data)
+
+    #}
+    return(df)
+}
+
+
+
+#############################################################################
+plot_skyline_output <- function(Skyline_output){
+
+    Skyline_output |>
+        dplyr::filter(Isotope_Label_Type == "Quan") |>
+        dplyr::mutate(OrderedMolecule = factor(Molecule, levels = unique(Molecule[order(C_number, Cl_number)]))) |>  # Create a composite ordering factor
+        plotly::plot_ly(
+            x = ~ OrderedMolecule,
+            y = ~ Area,
+            color = ~ Sample_Type,
+            type = "box",
+            text = ~paste(
+                "Homologue: ", PCA,
+                "<br>Sample: ", Replicate_Name,
+                "<br>Area:", round(Area, 2)
+            ),
+            hoverinfo = "text"
+        ) |>
+        plotly::layout(xaxis = list(title = 'Molecule'),
+                       yaxis = list(title = 'Area'))
+}
+
+#############################################################################
+
+plot_calibration_curves <- function(CPs_standards) {
+    # Unnest the data first
+    CPs_standards_unnested <- CPs_standards |>
+        dplyr::filter(RF > 0) |>
+        tidyr::unnest(data) |>
+        dplyr::mutate(Molecule = factor(Molecule,
+                                        levels = unique(Molecule[order(C_number, Cl_number)])))
+
+    # Get unique Quantification Groups
+    groups <- unique(CPs_standards_unnested$Quantification_Group)
+
+    # Create a list to store individual plots
+    plot_list <- list()
+
+    # Create individual plots for each group
+    for(i in seq_along(groups)) {
+        group_data <- CPs_standards_unnested |>
+            dplyr::filter(Quantification_Group == groups[i])
+
+        plot_list[[i]] <- plotly::plot_ly() |>
+            plotly::add_trace(
+                data = group_data,
+                x = ~Analyte_Concentration,
+                y = ~Area,
+                color = ~PCA,
+                type = 'scatter',
+                mode = 'markers',
+                legendgroup = ~Molecule_List,
+                legendgrouptitle = list(text = ~Molecule_List),
+                showlegend = FALSE,
+                name = ~paste(PCA, "(points)"),
+                text = ~paste(
+                    "Molecule:", Molecule,
+                    "<br>Area:", round(Area, 2),
+                    "<br>Concentration:", round(Analyte_Concentration, 2),
+                    "<br>R2:", round(rsquared, 3)
+                ),
+                hoverinfo = 'text'
+            ) |>
+            plotly::add_trace(
+                data = group_data,
+                x = ~Analyte_Concentration,
+                y = ~RF * Analyte_Concentration + intercept,
+                color = ~PCA,
+                type = 'scatter',
+                mode = 'lines',
+                legendgroup = ~Molecule_List,
+                name = ~PCA,
+                hoverinfo = 'none'
+            )
+    }
+
+    # Calculate layout
+    subplot_cols <- min(length(groups), 2)  # Maximum 2 columns
+    subplot_rows <- ceiling(length(groups) / subplot_cols)
+
+    # Create annotations for titles
+    annotations <- list()
+    for(i in seq_along(groups)) {
+        row <- ceiling(i/subplot_cols)
+        col <- if(i %% subplot_cols == 0) subplot_cols else i %% subplot_cols
+
+        annotations[[i]] <- list(
+            text = groups[i],
+            font = list(size = 14),
+            xref = "paper",
+            yref = "paper",
+            x = (col - 0.5)/subplot_cols,
+            y = 1 - (row - 1)/subplot_rows,
+            xanchor = "center",
+            yanchor = "bottom",
+            showarrow = FALSE
+        )
+    }
+
+    # Combine plots using subplot
+    final_plot <- plotly::subplot(
+        plot_list,
+        nrows = subplot_rows,
+        shareX = FALSE,
+        #shareY = TRUE,
+        shareY = FALSE,
+        margin = 0.1
+    ) |>
+        plotly::layout(
+            height = 400 * subplot_rows,
+            showlegend = TRUE,
+            annotations = annotations,
+            margin = list(t = 50, b = 50, l = 50, r = 50),
+            legend = list(
+                groupclick = "togglegroup",  # Changed from "toggleitem" to "togglegroup"
+                tracegroupgap = 10,
+                itemsizing = "constant"
+            )
+        )
+
+    return(final_plot)
+}
+
+#############################################################################
+
+plot_quanqualratio <- function(Skyline_output_filt) {
+
+    Skyline_output_filt |>
+        dplyr::group_by(Replicate_Name, Molecule) |>
+        dplyr::mutate(Quan_Area = ifelse(Isotope_Label_Type == "Quan", Area, NA)) |>
+        tidyr::fill(Quan_Area, .direction = "downup") |>
+        dplyr::mutate(QuanMZ = ifelse(Isotope_Label_Type == "Quan", Chromatogram_Precursor_MZ, NA)) |>
+        tidyr::fill(QuanMZ, .direction = "downup") |>
+        dplyr::mutate(QuanQualRatio = ifelse(Isotope_Label_Type == "Qual", Quan_Area/Area, 1)) |>
+        tidyr::replace_na(list(QuanQualRatio = 0)) |>
+        dplyr::mutate(QuanQualMZ = paste0(QuanMZ,"/",Chromatogram_Precursor_MZ)) |>
+        dplyr::ungroup() |>
+        dplyr::select(Replicate_Name, Sample_Type, Molecule_List, Molecule, QuanQualMZ, QuanQualRatio) |>
+        plotly::plot_ly(x = ~Replicate_Name, y = ~QuanQualRatio, type = 'violin', color = ~Sample_Type,
+                        text = ~paste("Sample: ", Replicate_Name,
+                                      "<br>Molecule List: ", Molecule_List,
+                                      "<br>Molecule: ", Molecule,
+                                      "<br>Quan/Qual MZ: ", QuanQualMZ,
+                                      "<br>Ratio: ", round(QuanQualRatio, 2)),
+                        hoverinfo = "text") |>
+        plotly::layout(title = 'Quan-to-Qual Ratio',
+                       xaxis = list(title = 'Replicate Name'),
+                       yaxis = list(title = 'Quan-to-Qual Ratio'))
+
+
+}
+
+##############################################################################
+
+plot_sample_contribution <- function(deconvolution) {
+
+    # How much contribution of each sample to the final deconvoluted homologue group pattern
+    plot_data <- deconvolution |>
+        unnest(deconv_coef) |>
+        unnest_longer(c(deconv_coef, Batch_Name)) |>
+        select(Replicate_Name, Batch_Name, deconv_coef)
+
+    # Create the plotly stacked bar plot
+    plotly::plot_ly(plot_data,
+                    x = ~Replicate_Name,
+                    y = ~deconv_coef,
+                    type = "bar",
+                    color = ~Batch_Name,
+                    colors = "Spectral") |>
+        plotly::layout(
+            title = list(
+                text = "Contributions from standards to deconvoluted homologue pattern",
+                x = 0.5,  # Center the title
+                y = 0.95  # Position slightly down from top
+            ),
+            barmode = "stack",
+            xaxis = list(title = "Replicate Name"),
+            yaxis = list(title = "Relative Contribution",
+                         tickformat = ".2%"),
+            showlegend = TRUE,
+            legend = list(title = list(text = "Batch Name"))
+        )
+}
+
+#############################################################################
+
+plot_homologue_group_pattern_comparison <- function(Sample_distribution, input_selectedSamples){
+
+    # Filter data for selected samples and reshape data
+    selected_samples <- Sample_distribution |>
+        dplyr::filter(Replicate_Name %in% input_selectedSamples) |>
+        dplyr::mutate(Molecule = factor(Molecule, levels = unique(Molecule[order(C_number, Cl_number)])))
+
+    # Get unique homologue groups for consistent coloring
+    homologue_groups <- unique(selected_samples$C_homologue)
+
+    # Create a list of plots, one for each Replicate_Name
+    plot_list <- selected_samples |>
+        split(selected_samples$Replicate_Name) |>
+        map(function(df) {
+            # Create base plot
+            p <- plotly::plot_ly()
+
+            # Add bars for each homologue group
+            for(hg in homologue_groups) {
+                df_filtered <- df[df$C_homologue == hg,]
+                p <- p |>
+                    plotly::add_trace(
+                        data = df_filtered,
+                        x = ~Molecule,
+                        y = ~Relative_Area,
+                        name = hg,
+                        legendgroup = hg,
+                        showlegend = (df_filtered$Replicate_Name[1] == input_selectedSamples[1]),
+                        type = 'bar',
+                        opacity = 1
+                    )
+            }
+
+            # Add the black line for resolved_distribution
+            p <- p |>
+                plotly::add_trace(
+                    data = df,
+                    x = ~Molecule,
+                    y = ~resolved_distribution,
+                    name = "Deconvoluted Distribution",
+                    legendgroup = "DeconvDistr",
+                    showlegend = (df$Replicate_Name[1] == input_selectedSamples[1]),
+                    type = 'scatter',
+                    mode = 'lines+markers',
+                    line = list(color = 'black'),
+                    marker = list(color = 'black', size = 6),
+                    opacity = 0.7
+                )
+
+            # Add layout
+            p <- p |>
+                plotly::layout(
+                    xaxis = list(
+                        title = "Homologue",
+                        tickangle = 45
+                    ),
+                    yaxis = list(title = "Value"),
+                    barmode = 'group',
+                    annotations = list(
+                        x = 0.5,
+                        y = 1.1,
+                        text = unique(df$Replicate_Name),
+                        xref = 'paper',
+                        yref = 'paper',
+                        showarrow = FALSE
+                    )
+                )
+
+            return(p)
+        })
+
+    # Combine the plots using subplot
+    plotly::subplot(plot_list,
+                    nrows = ceiling(length(plot_list)/2),
+                    shareX = TRUE,
+                    shareY = TRUE) |>
+        plotly::layout(
+            #title = "Sample Comparison",
+            showlegend = TRUE,
+            hovermode = 'closest',
+            hoverlabel = list(bgcolor = "white"),
+            barmode = 'group'
+        ) |>
+        plotly::config(displayModeBar = TRUE) |>
+        htmlwidgets::onRender("
+                function(el) {
+                    var plotDiv = document.getElementById(el.id);
+                    plotDiv.on('plotly_legendclick', function(data) {
+                        Plotly.restyle(plotDiv, {
+                            visible: data.data[data.curveNumber].visible === 'legendonly' ? true : 'legendonly'
+                        }, data.fullData.map((trace, i) => i).filter(i =>
+                            data.fullData[i].legendgroup === data.fullData[data.curveNumber].legendgroup
+                        ));
+                        return false;
+                    });
+                }
+            ")
+}
+
 
 #--------------------------------UI function----------------------------------#
 ui <- shiny::navbarPage(
@@ -945,7 +1303,7 @@ ui <- shiny::navbarPage(
     shiny::tabPanel("Normal settings",
                     shiny::fluidPage(shiny::sidebarLayout(
                         shiny::sidebarPanel(
-                            shiny::numericInput("Cmin", "C atoms min (allowed 3-40)", value = 9, min = 3, max = 40),
+                            shiny::numericInput("Cmin", "C atoms min (allowed 3-40)", value = 10, min = 3, max = 40),
                             shiny::numericInput("Cmax", "C atoms max (allowed 4-40)", value = 30, min = 4, max = 40),
                             shiny::numericInput("Clmin", "Cl atoms min (allowed 1-15))", value = 3, min = 1, max = 15),
                             shiny::numericInput("Clmax", "Cl atoms max (allowed 1-15)", value = 15, min = 1, max = 15),
@@ -971,14 +1329,14 @@ ui <- shiny::navbarPage(
                                                     "[PCA-Cl-3HCl]+",
                                                     "[PCA-Cl-4HCl]+"
                                         ),
-                                        selected = "[PCA-Cl]-",
+                                        selected = "[PCA+Cl]-",
                                         multiple = TRUE,
                                         selectize = TRUE,
                                         width = NULL,
                                         size = NULL),
                             shiny::numericInput("threshold", "Isotope rel ab threshold (5-99%)", value = 5, min = 0, max = 99),
                             shiny::textAreaInput("ISRS_input", "Optional: add ion formula for IS/RS",
-                                                 placeholder = "Enter one formula per line (e.g., )", height = "150px"),
+                                                 placeholder = "Enter one formula per line. Indicate IS or RS isotopic formula and charge separated by space. Example: IS [13]C2C8H17Cl5 -    or   RS [13]C12H17Br6 -" , height = "150px"),
                             shiny::actionButton("go1", "Submit", width = "100%"),
                             width = 3),
                         shiny::mainPanel(
@@ -989,7 +1347,7 @@ ui <- shiny::navbarPage(
     shiny::tabPanel("Advanced settings",
                     shiny::fluidPage(shiny::sidebarLayout(
                         shiny::sidebarPanel(
-                            shiny::numericInput("Cmin_adv", "C atoms min (allowed 3-40)", value = 9, min = 3, max = 40),
+                            shiny::numericInput("Cmin_adv", "C atoms min (allowed 3-40)", value = 10, min = 3, max = 40),
                             shiny::numericInput("Cmax_adv", "C atoms max (allowed 4-40)", value = 30, min = 4, max = 40),
                             shiny::numericInput("Clmin_adv", "Cl atoms min (allowed 1-15))", value = 3, min = 1, max = 15),
                             shiny::numericInput("Clmax_adv", "Cl atoms max (allowed 1-15)", value = 15, min = 1, max = 15),
@@ -1017,14 +1375,17 @@ ui <- shiny::navbarPage(
                                         selectize = TRUE,
                                         width = NULL,
                                         size = NULL),
-                            selectInput("TP_adv", "Transformation product?",
-                                        choices = c("None", "-Cl+OH", "-2Cl+2OH", "+OH", "+2OH", "-2H+O", "+SO4H"),
+                            selectInput("TP_adv", "Transformation product",
+                                        choices = c("None", "-Cl+OH", "-2Cl+2OH", "-H+OH", "-2H+2OH", "-2H+O", "-H+SO4H"),
                                         selected = "None",
                                         multiple = TRUE,
                                         selectize = TRUE,
                                         width = NULL,
                                         size = NULL),
                             shiny::numericInput("threshold_adv", "Isotope rel ab threshold (0-99%)", value = 50, min = 0, max = 99),
+                            shiny::textAreaInput("ISRS_input_adv", "Optional: add ion formula for IS/RS",
+                                                 placeholder = "Enter one formula per line. Indicate IS or RS isotopic formula and charge separated by space. Example: IS [13]C2C8H17Cl5 -    or   RS [13]C12H17Br6 -" , height = "150px"),
+
                             shiny::actionButton("go_adv", "Submit", width = "100%"),
                             width = 3),
                         shiny::mainPanel(
@@ -1051,7 +1412,6 @@ ui <- shiny::navbarPage(
     shiny::tabPanel("Skyline",
                     shiny::fluidPage(shiny::sidebarLayout(
                         shiny::sidebarPanel(
-                            #shiny::numericInput("MSresolution2", "MS Resolution", value = 60000, min = 100, max = 3000000),
                             shiny::radioButtons("QuantIon", label = "Use as Quant Ion", choices = c("Most intense")),
                             #shiny::radioButtons("skylineoutput", label = "Output table", choices = c("mz", "IonFormula")),
                             shiny::radioButtons("skylineoutput", label = "Output table", choices = c("mz")),
@@ -1071,7 +1431,7 @@ ui <- shiny::navbarPage(
             shiny::sidebarPanel(shiny::h3("Manual"),
                                 width = 3),
             shiny::mainPanel(
-                shiny::includeMarkdown("R/instructions_CPions.md")
+                shiny::includeMarkdown("instructions_CPions.md")
             )
         )
     )
@@ -1111,13 +1471,14 @@ server = function(input, output, session) {
     selectedTP_adv <- shiny::eventReactive(input$go_adv, {as.character((input$TP_adv))})
 
     C_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Cmin_adv:input$Cmax_adv)})
-    Cl_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Clmin:input$Clmax_adv)})
+    Cl_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Clmin_adv:input$Clmax_adv)})
     Clmin_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Clmin_adv)})
     Clmax_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Clmax_adv)})
-    Br_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Brmin:input$Brmax_adv)})
+    Br_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Brmin_adv:input$Brmax_adv)})
     Brmin_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Brmin_adv)})
     Brmax_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$Brmax_adv)})
     threshold_adv <- shiny::eventReactive(input$go_adv, {as.integer(input$threshold_adv)})
+    ISRS_input_adv <- shiny::eventReactive(input$go_adv, {as.character(input$ISRS_input_adv)})
 
 
     #----Outputs_Start
@@ -1146,16 +1507,15 @@ server = function(input, output, session) {
             CP_allions <- dplyr::full_join(CP_allions, input)
         }
 
-        # Add the ISRS if they exist
-        # ISRS <- unlist(str_split(ISRS_input(), "\n"))
-        # browser()
+
+        # Add ISRS if textinput is not empty ""
+        if(ISRS_input() != ""){
+            CP_allions <- addISRS(ISRS_input(), CP_allions, threshold())
+        }
+
 
         return(CP_allions)
     })
-
-    #############################################################
-    ### go1: Calculate the isotopes from initial settings tab ###
-    #############################################################
 
     shiny::observeEvent(input$go1, {
         output$Table_norm <- DT::renderDT(server=FALSE,{ #need to keep server = FALSE otherwise excel download the visible rows of the table, but this will also give warning about large tables
@@ -1215,7 +1575,14 @@ server = function(input, output, session) {
                 }
             }
         }
+
+        # Add ISRS if textinput is not empty ""
+        if(ISRS_input_adv() != ""){
+            CP_allions <- addISRS(ISRS_input_adv(), CP_allions, threshold_adv())
+        }
+
         return(CP_allions)
+
     })
 
     ### go_adv: Calculate the isotopes from initial settings tab ###
@@ -1278,7 +1645,7 @@ server = function(input, output, session) {
                     dplyr::mutate(`81Br` = tidyr::replace_na(`81Br`, 0)) |>
                     plotly::plot_ly(
                         x = ~ (`12C`+`13C`),
-                        y = ~(`35Cl`+`37Cl`+`79Br`+`81Br`), # need to incorporate Br later
+                        y = ~(`35Cl`+`37Cl`+`79Br`+`81Br`),
                         type = "scatter",
                         mode = "markers",
                         color = ~interference,
@@ -1414,13 +1781,16 @@ server = function(input, output, session) {
     shiny::observeEvent(input$go3, {
 
 
-        if(input$skylineoutput == "mz"){ #Removed  skylineoutput==IonFormula since not compatible with [M-Cl]- (adduct not available in skyline)
+        if(input$skylineoutput == "mz"){ #Removed  skylineoutput==IonFormula since not compatible with [M-Cl]- (adduct not available in current skyline)
 
             if (input$skyline_NormAdv == "advanced") {
                 CP_allions_skyline <- CP_allions_glob_adv() |>
-                    dplyr::mutate(`Molecule List Name` = dplyr::case_when(Compound_Class == "PCA" ~ paste0("PCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
-                                                                          Compound_Class == "PCO" ~ paste0("PCO-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
-                                                                          Compound_Class == "BCA" ~ paste0("BCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")))) |>
+                    dplyr::mutate(`Molecule List Name` = dplyr::case_when(
+                        Compound_Class == "PCA" ~ paste0("PCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
+                        Compound_Class == "PCO" ~ paste0("PCO-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
+                        Compound_Class == "BCA" ~ paste0("BCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
+                        stringr::str_detect(Compound_Class, "^IS$") == TRUE ~ Compound_Class,
+                        stringr::str_detect(Compound_Class, "^RS$") == TRUE ~ Compound_Class)) |>
                     dplyr::rename(`Molecule Name` = Molecule_Formula) |>
                     dplyr::mutate(`Precursor m/z` = `m/z`) |>
                     # mutate(Note = str_replace(Adduct, "\\].*", "]")) |>
@@ -1442,9 +1812,12 @@ server = function(input, output, session) {
                                   Note)
             } else if (input$skyline_NormAdv == "normal") {
                 CP_allions_skyline <- CP_allions_glob() |>
-                    dplyr::mutate(`Molecule List Name` = dplyr::case_when(stringr::str_detect(Adduct, "(?<=.)PCA(?=.)") == TRUE ~ paste0("PCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
-                                                                          stringr::str_detect(Adduct, "(?<=.)PCO(?=.)") == TRUE ~ paste0("PCO-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
-                                                                          stringr::str_detect(Adduct, "(?<=.)BCA(?=.)") == TRUE ~ paste0("BCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")))) |>
+                    dplyr::mutate(`Molecule List Name` = dplyr::case_when(
+                        stringr::str_detect(Adduct, "(?<=.)PCA(?=.)") == TRUE ~ paste0("PCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
+                        stringr::str_detect(Adduct, "(?<=.)PCO(?=.)") == TRUE ~ paste0("PCO-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
+                        stringr::str_detect(Adduct, "(?<=.)BCA(?=.)") == TRUE ~ paste0("BCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
+                        stringr::str_detect(Compound_Class, "^IS$") == TRUE ~ Compound_Class,
+                        stringr::str_detect(Compound_Class, "^RS$") == TRUE ~ Compound_Class)) |>
                     dplyr::rename(`Molecule Name` = Molecule_Formula) |>
                     dplyr::mutate(`Precursor m/z` = `m/z`) |>
                     dplyr::rename(Note = Adduct) |>
