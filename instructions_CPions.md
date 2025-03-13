@@ -37,7 +37,7 @@ The input for the ion formula is written in three parts, each separated by a `bl
 Example:  
 IS [13]C2C8H17Cl5 -  
 RS [13]C12H17Br6 -  
-
+_(make sure there is no empty last line)_  
   
 ## Advanced settings tab  
 Mostly same initial parameters as Normal settings. In advanced settings, there is more flexibility to combine and mix the `Compound Class`, `Adduct`, `Charge`, and `Transformation product`.  
@@ -77,8 +77,9 @@ The input for the ion formula is written in three parts, each separated by a `bl
 Example:  
 IS [13]C2C8H17Cl5 -  
 RS [13]C12H17Br6 -  
+_(make sure there is no empty last line)_
   
-
+  
 ### Plot outputs  
   
 Note: Some bars can exceed 100% in relative abundance in the y-axis, and this indicates that some isotopologues have the exact same ion formula. You can hover over the different segments of these bars to check the overlapping mass ions.
