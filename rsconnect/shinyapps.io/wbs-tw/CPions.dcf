@@ -5,7 +5,7 @@ account: wbs-tw
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 14200730
-bundleId: 9939958
+bundleId: 10886969
 url: https://wbs-tw.shinyapps.io/CPions/
 version: 1
 asMultiple: FALSE

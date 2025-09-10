@@ -20,17 +20,12 @@ library(markdown)
 
 # Various utilities and helper functions for CPions
 
-
-
 ####################################################################################
 #-------------------------------- CPions functions --------------------------------#
 ####################################################################################
 
 
 #############################################################################
-#############################################################################
-
-
 create_formula <- function(C, H, Cl, Br, S, O) {
     formula <- paste0(
         dplyr::case_when(C < 1 ~ paste0(""),
@@ -56,8 +51,6 @@ create_formula <- function(C, H, Cl, Br, S, O) {
     stringr::str_trim(formula)
 }
 
-
-#############################################################################
 #############################################################################
 
 
@@ -77,8 +70,6 @@ create_elements <- function(data) {
 
 
 #############################################################################
-#############################################################################
-
 
 create_formula_isotope <- function(`12C`,`13C`, `1H`,`2H`, `35Cl`, `37Cl`, `79Br`, `81Br`, `16O`, `17O`, `18O`, `32S`, `33S`, `34S`, `36S`){
     formula_iso <- paste0(
@@ -104,8 +95,6 @@ create_formula_isotope <- function(`12C`,`13C`, `1H`,`2H`, `35Cl`, `37Cl`, `79Br
 
 
 #############################################################################
-#############################################################################
-
 
 calculate_haloperc <- function(Molecule_Formula) {
     # Regular expression to extract atoms and their counts
@@ -147,9 +136,8 @@ calculate_haloperc <- function(Molecule_Formula) {
 
 
 #############################################################################
-#############################################################################
-######### This function generates input for the Envipat function ###########
 
+# This function generates input for the Envipat function
 
 generateInput_Envipat_normal <- function(data = data, group = group, adduct_ions = adduct_ions, fragment_ions = fragment_ions) {
 
@@ -195,8 +183,6 @@ generateInput_Envipat_normal <- function(data = data, group = group, adduct_ions
 
 
 #############################################################################
-#############################################################################
-
 
 generateInput_Envipat_BCA <- function(data = data, group = group, adduct_ions = adduct_ions, fragment_ions = fragment_ions) {
 
@@ -234,8 +220,6 @@ generateInput_Envipat_BCA <- function(data = data, group = group, adduct_ions = 
 
 
 #############################################################################
-#############################################################################
-
 
 generateInput_Envipat_advanced <- function(data = data, Compounds = Compounds, Adduct_Ion = Adduct_Ion,
                                            TP = TP, Charge = Charge) {
@@ -294,8 +278,6 @@ generateInput_Envipat_advanced <- function(data = data, Compounds = Compounds, A
 
 
 #############################################################################
-#############################################################################
-
 
 getAdduct_normal <- function(adduct_ions, C, Cl, Clmax, threshold) {
     # Regex to extract strings
@@ -457,8 +439,6 @@ getAdduct_normal <- function(adduct_ions, C, Cl, Clmax, threshold) {
 
 
 #############################################################################
-#############################################################################
-
 
 getAdduct_BCA <- function(adduct_ions, C, Cl, Br, Clmax, Brmax, threshold) {
 
@@ -573,8 +553,6 @@ getAdduct_BCA <- function(adduct_ions, C, Cl, Br, Clmax, Brmax, threshold) {
 }
 
 #############################################################################
-#############################################################################
-
 
 getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, Br, Brmax, threshold) {
 
@@ -754,7 +732,6 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
 
 }
 
-########################################################################
 ########################################################################
 
 # from envipat
@@ -946,10 +923,9 @@ isotopes <- structure(list(element = c("H", "H", "He", "He", "Li", "Li",
 
 
 #############################################################################
-#############################################################################
 
-## NOT WORKING YET ##
-#Add the ISRS formula to the CP_allions table if they exist
+# Add the ISRS formula to the CP_allions table if they exist
+# Should be the adduct ion formula
 
 addISRS <- function(ISRS_input, CP_allions, threshold) {
 
@@ -1000,10 +976,15 @@ addISRS <- function(ISRS_input, CP_allions, threshold) {
     ISRS_data <- do.call(rbind, ISRS_data)
     df <- dplyr::bind_rows(CP_allions, ISRS_data)
 
-    #}
+
     return(df)
 }
 
+
+#############################################################################
+#############################################################################
+
+#--------------------------------UI function----------------------------------#
 ui <- shiny::navbarPage(
     "CPions",
     theme = shinythemes::shinytheme('spacelab'),
@@ -1138,7 +1119,7 @@ ui <- shiny::navbarPage(
             shiny::sidebarPanel(shiny::h3("Manual"),
                                 width = 3),
             shiny::mainPanel(
-                shiny::includeMarkdown("instructions_CPions.md")
+                shiny::includeMarkdown(system.file("instructions_CPions.md"))
             )
         )
     )
@@ -1359,7 +1340,7 @@ server = function(input, output, session) {
                         hoverinfo = "text",
                         hovertext = paste("Molecule_Formula:", CP_allions_compl2$Molecule_Formula,
                                           '<br>',
-                                          "Adduct/Fragment ion:", CP_allions_compl2$Adduct_Annotation,
+                                          "Adduct/Fragment ion:", CP_allions_compl2$Adduct,
                                           '<br>',
                                           "Ion Formula:", CP_allions_compl2$Adduct_Formula,
                                           '<br>',
@@ -1383,7 +1364,7 @@ server = function(input, output, session) {
                         hoverinfo = "text",
                         hovertext = paste("Molecule_Formula:", CP_allions_compl2$Molecule_Formula,
                                           '<br>',
-                                          "Adduct/Fragment ion:", CP_allions_compl2$Adduct_Annotation,
+                                          "Adduct/Fragment ion:", CP_allions_compl2$Adduct,
                                           '<br>',
                                           "Ion Formula:", CP_allions_compl2$Adduct_Formula,
                                           '<br>',
@@ -1411,7 +1392,7 @@ server = function(input, output, session) {
                     hoverinfo = "text",
                     hovertext = paste("Molecule_Formula:", CP_allions_compl2$Molecule_Formula,
                                       '<br>',
-                                      "Adduct/Fragment ion:", CP_allions_compl2$Adduct_Annotation,
+                                      "Adduct/Fragment ion:", CP_allions_compl2$Adduct,
                                       '<br>',
                                       "Ion Formula:", CP_allions_compl2$Adduct_Formula,
                                       '<br>',
@@ -1438,7 +1419,7 @@ server = function(input, output, session) {
                     hoverinfo = "text",
                     hovertext = paste("Molecule_Formula:", CP_allions_compl2$Molecule_Formula,
                                       '<br>',
-                                      "Adduct/Fragment ion:", CP_allions_compl2$Adduct_Annotation,
+                                      "Adduct/Fragment ion:", CP_allions_compl2$Adduct,
                                       '<br>',
                                       "Ion Formula:", CP_allions_compl2$Adduct_Formula,
                                       '<br>',
@@ -1503,15 +1484,15 @@ server = function(input, output, session) {
                         stringr::str_detect(Compound_Class, "^RS$") == TRUE ~ Compound_Class)) |>
                     dplyr::rename(`Molecule Name` = Molecule_Formula) |>
                     dplyr::mutate(`Precursor m/z` = `m/z`) |>
-                    # mutate(Note = str_replace(Adduct, "\\].*", "]")) |>
-                    # mutate(Note = str_replace(Note, "(.+?(?=\\-))|(.+?(?=\\+))", "[M")) |>
-                    dplyr::mutate(Note = ifelse(TP == "None", Compound_Class, paste0(Compound_Class, TP))) |>
+                    #dplyr::mutate(Note = Adduct_Annotation) |>
+                    dplyr::mutate(Note = paste0("{", Adduct_Annotation, "}", "{", Rel_ab, "}")) |>
                     dplyr::rename(`Precursor Charge` = Charge) |>
                     tibble::add_column(`Explicit Retention Time` = NA) |>
                     tibble::add_column(`Explicit Retention Time Window` = NA) |>
                     dplyr::group_by(`Molecule Name`) |>
                     dplyr::mutate(`Label Type` = ifelse(Rel_ab == 100, "Quan", "Qual")) |> # choose the highest rel_ab ion as quan ion and the rest will be qual
                     dplyr::ungroup() |>
+                    #dplyr::rename(`Molecule Note` = Rel_ab) |> #rename Rel_ab to Molecular Note to be able to add into Skyline
                     dplyr::select(`Molecule List Name`,
                                   `Molecule Name`,
                                   `Precursor Charge`,
@@ -1530,13 +1511,14 @@ server = function(input, output, session) {
                         stringr::str_detect(Compound_Class, "^RS$") == TRUE ~ Compound_Class)) |>
                     dplyr::rename(`Molecule Name` = Molecule_Formula) |>
                     dplyr::mutate(`Precursor m/z` = `m/z`) |>
-                    dplyr::rename(Note = Adduct) |>
-                    dplyr::rename(`Precursor Charge` = Charge) |>
+                    #dplyr::rename(Note = Adduct) |>
+                    dplyr::mutate(Note = paste0("{", Adduct, "}", "{", Rel_ab, "}")) |>dplyr::rename(`Precursor Charge` = Charge) |>
                     tibble::add_column(`Explicit Retention Time` = NA) |>
                     tibble::add_column(`Explicit Retention Time Window` = NA) |>
                     dplyr::group_by(`Molecule Name`) |>
                     dplyr::mutate(`Label Type` = ifelse(Rel_ab == 100, "Quan", "Qual")) |> # choose the highest rel_ab ion as quan ion and the rest will be qual
                     dplyr::ungroup() |>
+                    #dplyr::rename(`Molecule Note` = Rel_ab) |> #rename Rel_ab to Molecular Note to be able to add into Skyline
                     dplyr::select(`Molecule List Name`,
                                   `Molecule Name`,
                                   `Precursor Charge`,
