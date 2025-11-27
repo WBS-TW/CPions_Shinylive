@@ -1,4 +1,4 @@
-# Copied from CPions 2025-03-13
+# Copied from CPions 2025-11-27
 # Deploy CPions on static website in Github pages using Shinylive
 
 library(shiny)
@@ -1126,7 +1126,7 @@ ui <- shiny::navbarPage(
             shiny::sidebarPanel(shiny::h3("Manual"),
                                 width = 3),
             shiny::mainPanel(
-                shiny::includeMarkdown("./instructions_CPions.md")
+                shiny::includeMarkdown("instructions_CPions.md")
             )
         )
     )
