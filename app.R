@@ -20,6 +20,8 @@ library(markdown)
 
 # Various utilities and helper functions for CPions
 
+
+
 ####################################################################################
 #-------------------------------- CPions functions --------------------------------#
 ####################################################################################
@@ -118,8 +120,8 @@ calculate_haloperc <- function(Molecule_Formula) {
         dplyr::mutate(MW_atoms = MW*Count) |>
         dplyr::mutate(Halogen = case_when(Atom == "Cl" ~ TRUE,
                                           Atom == "Br" ~ TRUE,
-                                          Atom == "F" ~ TRUE,
-                                          Atom == "I" ~ TRUE,
+                                          #Atom == "F" ~ TRUE, #removed F since only Cl/Br mixtures are used
+                                          #Atom == "I" ~ TRUE, #removed I since only Cl/Br mixtures are used
                                           .default = FALSE))
 
     mw <- sum(result$MW_atoms)
@@ -221,7 +223,7 @@ generateInput_Envipat_BCA <- function(data = data, group = group, adduct_ions = 
 
 #############################################################################
 
-generateInput_Envipat_advanced <- function(data = data, Compounds = Compounds, Adduct_Ion = Adduct_Ion,
+generateInput_Envipat_advanced <- function(data = data, Class = Class, Adduct_Ion = Adduct_Ion,
                                            TP = TP, Charge = Charge) {
 
 
@@ -229,11 +231,12 @@ generateInput_Envipat_advanced <- function(data = data, Compounds = Compounds, A
         dplyr::mutate(Adduct_Ion = Adduct_Ion) |>
         dplyr::mutate(Charge = Charge) |>
         dplyr::mutate(Adduct_Annotation = dplyr::case_when(
-            TP == "None" ~ paste0("[", Compounds, Adduct_Ion, "]", Charge),
-            .default = paste0("[", Compounds, TP, Adduct_Ion, "]", Charge))) |>
+            TP == "None" ~ paste0("[", Class, Adduct_Ion, "]", Charge),
+            .default = paste0("[", Class, TP, Adduct_Ion, "]", Charge))) |>
         dplyr::mutate(Adduct_Annotation = stringr::str_replace(Adduct_Annotation, "\\d$", "")) |>
-        dplyr::mutate(Compound_Class = Compounds) |>
-        dplyr::mutate(TP = TP) |>
+        dplyr::mutate(Compound_Class = Class) |>
+        #dplyr::mutate(TP = TP) |>
+        dplyr::mutate(TP = paste0(TP)) |>
         dplyr::mutate(Cl = dplyr::case_when(
             Adduct_Ion == "-Cl" ~ Cl-1,
             Adduct_Ion == "-HCl" ~ Cl-1,
@@ -554,10 +557,16 @@ getAdduct_BCA <- function(adduct_ions, C, Cl, Br, Clmax, Brmax, threshold) {
 
 #############################################################################
 
-getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, Br, Brmax, threshold) {
+getAdduct_advanced <- function(Class, Adduct_Ion, TP, Charge, C, Cl, Clmax, Br, Brmax, threshold) {
 
     # Regex to extract strings
-    if (Compounds == "PCA") {
+
+    # ion_modes <- stringr::str_extract(adduct_ions, "(?<=\\]).{1}") # Using lookbehind assertion to extract ion mode
+    # fragment_ions <- stringr::str_extract(adduct_ions, "(?<=.{4}).+?(?=\\])") # extract after the 3rd character and before ]
+    # group <- stringr::str_extract(adduct_ions, "(?<=\\[)[A-Za-z]+(?=[+-])") # Using positive lookbehind precedes a [ ; matches on or more letters ; positive lookahead of either + or -
+    #
+
+    if (Class == "PCA") {
         data <- crossing(C, Cl) |> #set combinations of C and Cl
             dplyr::filter(C >= Cl) |> # filter so Cl dont exceed C atoms
             dplyr::filter(Cl <= Clmax) |> # limit chlorine atoms.
@@ -583,7 +592,7 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
                 TP == "-2H+O" ~ paste0("C", C, "H", H, "Cl", Cl,"O"),
                 TP == "-H+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "SO4")))
 
-    } else if (Compounds == "PCO") {
+    } else if (Class == "PCO") {
         data <- crossing(C, Cl) |>
             dplyr::filter(C >= Cl) |>
             dplyr::filter(Cl <= Clmax) |>
@@ -609,7 +618,7 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
                 TP == "-2H+O" ~ paste0("C", C, "H", H, "Cl", Cl,"O"),
                 TP == "-H+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "SO4")))
 
-    } else if (Compounds == "BCA") {
+    } else if (Class == "BCA") {
         data <- tidyr::crossing(C, Cl, Br) |>  #get combinations of C, Cl, Br
             dplyr::filter(C >= Cl) |>  # filter so Cl dont exceed C atoms
             dplyr::filter(Cl <= Clmax) |>  # limit chlorine atoms.
@@ -631,8 +640,6 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
                 TP == "-2Cl+2OH" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O2"),
                 TP == "-2H+O" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "O"),
                 TP == "-H+SO4H" ~ paste0("C", C, "H", H, "Cl", Cl, "Br", Br, "SO4")))
-
-
     }
 
 
@@ -648,7 +655,7 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
 
 
     #generate input data for envipat based on adduct ions
-    data <- generateInput_Envipat_advanced(data = data, Compounds = Compounds, Adduct_Ion = Adduct_Ion, TP = TP, Charge = Charge)
+    data <- generateInput_Envipat_advanced(data = data, Class = Class, Adduct_Ion = Adduct_Ion, TP = TP, Charge = Charge)
 
     # Remove formula without Cl after adduct formations
     data <- data |>
@@ -722,7 +729,7 @@ getAdduct_advanced <- function(Compounds, Adduct_Ion, TP, Charge, C, Cl, Clmax, 
     }
 
 
-    # combine all elements in list list to get dataframe
+    # combine all elements in list to get dataframe
     data_ls <- do.call(rbind, data_ls)
 
 
@@ -1024,7 +1031,7 @@ ui <- shiny::navbarPage(
                                         size = NULL),
                             shiny::numericInput("threshold", "Isotope rel ab threshold (1-99%)", value = 5, min = 1, max = 99),
                             shiny::textAreaInput("ISRS_input", "Optional: add ion formula for IS/RS",
-                                                 placeholder = "See Instructions", height = "150px"),
+                                                 placeholder = "Input the [M+adduct] ion formula. See Instructions", height = "150px"),
                             shiny::actionButton("go1", "Submit", width = "100%"),
                             width = 3),
                         shiny::mainPanel(
@@ -1072,7 +1079,7 @@ ui <- shiny::navbarPage(
                                         size = NULL),
                             shiny::numericInput("threshold_adv", "Isotope rel ab threshold (0-99%)", value = 50, min = 0, max = 99),
                             shiny::textAreaInput("ISRS_input_adv", "Optional: add ion formula for IS/RS",
-                                                 placeholder = "See Instructions" , height = "150px"),
+                                                 placeholder = "Input the [M+adduct] ion formula. See Instructions" , height = "150px"),
 
                             shiny::actionButton("go_adv", "Submit", width = "100%"),
                             width = 3),
@@ -1084,8 +1091,8 @@ ui <- shiny::navbarPage(
     shiny::tabPanel("Interfering ions",
                     shiny::fluidPage(shiny::sidebarLayout(
                         shiny::sidebarPanel(
-                            shiny::numericInput("MSresolution", "MS Resolution", value = 60000, min = 100, max = 5000000),
-                            shiny::radioButtons("interfere_NormAdv", label = "From Normal or Advanced settings", choices = c("normal", "advanced"), selected = "normal"),
+                            shiny::numericInput("MSresolution", "MS Resolution", value = 20000, min = 100, max = 5000000),
+                            shiny::radioButtons("interfere_mode", label = "From Normal or Advanced settings", choices = c("normal", "advanced"), selected = "normal"),
                             shiny::actionButton("go2", "Calculate", width = "100%"),
                             width = 2
                         ),
@@ -1103,7 +1110,7 @@ ui <- shiny::navbarPage(
                             shiny::radioButtons("QuantIon", label = "Use as Quant Ion", choices = c("Most intense")),
                             #shiny::radioButtons("skylineoutput", label = "Output table", choices = c("mz", "IonFormula")),
                             shiny::radioButtons("skylineoutput", label = "Output table", choices = c("mz")),
-                            shiny::radioButtons("skyline_NormAdv", label = "From Normal or Advanced settings", choices = c("normal", "advanced"), selected = "normal"),
+                            shiny::radioButtons("skyline_mode", label = "From Normal or Advanced settings", choices = c("normal", "advanced"), selected = "normal"),
                             shiny::actionButton("go3", "Transition List", width = "100%"),
                             width = 4
                         ),
@@ -1119,7 +1126,7 @@ ui <- shiny::navbarPage(
             shiny::sidebarPanel(shiny::h3("Manual"),
                                 width = 3),
             shiny::mainPanel(
-                shiny::includeMarkdown(system.file("instructions_CPions.md"))
+                shiny::includeMarkdown(system.file("instructions_CPions.md", package = "CPxplorer"))
             )
         )
     )
@@ -1153,7 +1160,7 @@ server = function(input, output, session) {
 
 
     # ADVANCED
-    selectedCompounds_adv <- shiny::eventReactive(input$go_adv, {as.character((input$Compclass_adv))})
+    selectedClass_adv <- shiny::eventReactive(input$go_adv, {as.character((input$Compclass_adv))})
     selectedAdducts_adv <- shiny::eventReactive(input$go_adv, {as.character(input$Adducts_adv)})
     selectedCharge_adv <- shiny::eventReactive(input$go_adv, {as.character((input$Charge_adv))})
     selectedTP_adv <- shiny::eventReactive(input$go_adv, {as.character((input$TP_adv))})
@@ -1241,7 +1248,7 @@ server = function(input, output, session) {
         on.exit(progress$close())
         progress$set(message = "Calculating", value = 0)
 
-        Compounds <- as.character(selectedCompounds_adv())
+        Class <- as.character(selectedClass_adv())
         Adducts <- as.character(selectedAdducts_adv())
         Charge <- as.character(selectedCharge_adv())
         TP <- as.character(selectedTP_adv())
@@ -1249,14 +1256,14 @@ server = function(input, output, session) {
         # function to get adducts or fragments
         CP_allions <- data.frame(Molecule_Formula = character(), Molecule_Halo_perc = double())
 
-        # nested for loop to get all combinations of Compounds, Adducts, TP
-        for (i in seq_along(Compounds)) {
-            progress$inc(1/length(Compounds), detail = paste0("Compound Class: ", Compounds[i], " . Please wait.."))
+        # nested for loop to get all combinations of Class, Adducts, TP
+        for (i in seq_along(Class)) {
+            progress$inc(1/length(Class), detail = paste0("Compound Class: ", Class[i], " . Please wait.."))
 
             for (j in seq_along(Adducts)) {
 
                 for (k in seq_along(TP)) {
-                    input <- getAdduct_advanced(Compounds = Compounds[i], Adduct_Ion = Adducts[j], TP = TP[k], Charge = Charge,
+                    input <- getAdduct_advanced(Class = Class[i], Adduct_Ion = Adducts[j], TP = TP[k], Charge = Charge,
                                                 C = C_adv(), Cl = Cl_adv(), Clmax = Clmax_adv(), Br = Br_adv(), Brmax = Brmax_adv(),
                                                 threshold = threshold_adv())
                     CP_allions <- dplyr::full_join(CP_allions, input)
@@ -1305,9 +1312,9 @@ server = function(input, output, session) {
 
     shiny::observeEvent(input$go2, {
 
-        if (input$interfere_NormAdv == "normal") {
+        if (input$interfere_mode == "normal") {
             CP_allions_compl2 <- CP_allions_glob()}
-        else if (input$interfere_NormAdv == "advanced") {CP_allions_compl2 <- CP_allions_glob_adv()}
+        else if (input$interfere_mode == "advanced") {CP_allions_compl2 <- CP_allions_glob_adv()}
 
         CP_allions_compl2 <- CP_allions_compl2 |>
             dplyr::arrange(`m/z`) |>
@@ -1471,7 +1478,7 @@ server = function(input, output, session) {
 
         if(input$skylineoutput == "mz"){ #Removed  skylineoutput==IonFormula since not compatible with [M-Cl]- (adduct not available in current skyline)
 
-            if (input$skyline_NormAdv == "advanced") {
+            if (input$skyline_mode == "advanced") {
                 CP_allions_skyline <- CP_allions_glob_adv() |>
                     dplyr::mutate(`Molecule List Name` = dplyr::case_when(
                         Compound_Class == "PCA" & TP == "None" ~ paste0("PCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
@@ -1501,7 +1508,7 @@ server = function(input, output, session) {
                                   `Explicit Retention Time`,
                                   `Explicit Retention Time Window`,
                                   Note)
-            } else if (input$skyline_NormAdv == "normal") {
+            } else if (input$skyline_mode == "normal") {
                 CP_allions_skyline <- CP_allions_glob() |>
                     dplyr::mutate(`Molecule List Name` = dplyr::case_when(
                         stringr::str_detect(Adduct, "(?<=.)PCA(?=.)") == TRUE ~ paste0("PCA-C", stringr::str_extract(Molecule_Formula, "(?<=C)\\d+(?=H)")),
